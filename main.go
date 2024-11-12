@@ -32,6 +32,7 @@ type Game struct {
 
 	oX, oY, oZ          axes
 	newOX, newOY, newOZ axes
+	pos                 vectozavr.Vec3
 
 	cube  Cube
 	place Place
@@ -52,6 +53,10 @@ func NewGame() *Game {
 	g.oY.color = color.RGBA{0, 255, 0, 255}
 	g.oZ.v = vectozavr.NewVec3(0, 0, 1)
 	g.oZ.color = color.RGBA{0, 0, 255, 255}
+
+	g.newOX = g.oX
+	g.newOY = g.oY
+	g.newOZ = g.oZ
 
 	b := 0.1
 	pos := vectozavr.NewVec4(10, b-1, -10, 0)
@@ -97,7 +102,7 @@ func (g *Game) Update() error {
 	g.cam.Left, _ = g.oX.v.Normalize()
 	g.cam.At, _ = g.oZ.v.Normalize()
 	g.cam.Up, _ = g.oY.v.Normalize()
-	g.newAxes()
+	// g.newAxes()
 	// g.cam.Left = g.newOX.v
 	// g.cam.At = g.newOZ.v
 	// g.cam.Up = g.newOY.v
@@ -253,45 +258,25 @@ func placePrint(screen *ebiten.Image, g *Game, p Place) {
 // func gridPrint(screen *ebiten.Image, g *Game, step float64, val int) {
 // }
 
-func (g *Game) newAxes() {
+// func (g *Game) newAxes() {
 
-	// eA := vectozavr.NewMatrix([4][4]float64{
-	// 	{g.oX.v.X, g.oY.v.X, g.oZ.v.X, 0},
-	// 	{g.oX.v.Y, g.oY.v.Y, g.oZ.v.Y, 0},
-	// 	{g.oX.v.Z, g.oY.v.Z, g.oZ.v.Z, 0},
-	// 	{0, 0, 0, 1},
-	// })
-	// eA = g.SP.MatMul(eA)
-	// eA = g.cam.ViewMatrix.MatMul(eA)
-	// eA = g.Scale.MatMul(eA)
-	// dv := vectozavr.Translation(vectozavr.ZeroVec3().Sub(g.cam.E))
-	// eA = dv.MatMul(eA)
-	// g.worldE = eA
-	// g.newOX.v = eA.X()
-	// g.newOY.v = eA.Y()
-	// g.newOZ.v = eA.Z()
+// eA := vectozavr.NewMatrix([4][4]float64{
+// 	{g.oX.v.X, g.oY.v.X, g.oZ.v.X, 0},
+// 	{g.oX.v.Y, g.oY.v.Y, g.oZ.v.Y, 0},
+// 	{g.oX.v.Z, g.oY.v.Z, g.oZ.v.Z, 0},
+// 	{0, 0, 0, 1},
+// })
+// eA = g.SP.MatMul(eA)
+// eA = g.cam.ViewMatrix.MatMul(eA)
+// eA = g.Scale.MatMul(eA)
+// dv := vectozavr.Translation(vectozavr.ZeroVec3().Sub(g.cam.E))
+// eA = dv.MatMul(eA)
+// g.worldE = eA
+// g.newOX.v = eA.X()
+// g.newOY.v = eA.Y()
+// g.newOZ.v = eA.Z()
 
-	g.newOX = g.oX
-	g.newOY = g.oY
-	g.newOZ = g.oZ
-
-	g.newOX.v = g.cam.ViewMatrix.Vec3Mul(g.newOX.v)
-	g.newOY.v = g.cam.ViewMatrix.Vec3Mul(g.newOY.v)
-	g.newOZ.v = g.cam.ViewMatrix.Vec3Mul(g.newOZ.v)
-
-	g.newOX.v = g.SP.Vec3Mul(g.newOX.v)
-	g.newOY.v = g.SP.Vec3Mul(g.newOY.v)
-	g.newOZ.v = g.SP.Vec3Mul(g.newOZ.v)
-
-	g.newOX.v = g.Scale.Vec3Mul(g.newOX.v)
-	g.newOY.v = g.Scale.Vec3Mul(g.newOY.v)
-	g.newOZ.v = g.Scale.Vec3Mul(g.newOZ.v)
-
-	g.worldE = vectozavr.NewMatrixVec3(g.newOX.v, g.newOY.v, g.newOZ.v)
-
-	fmt.Println(g.worldE)
-
-}
+// }
 
 // func screenToWorld(mousePosVec4 vectozavr.Vec4, g *Game) vectozavr.Vec3 {
 // }
@@ -317,6 +302,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	ebitenutil.DebugPrintAt(screen, fmt.Sprintf(
 		"g.SP: %.f\ng.P:%.f",
 		g.SP, g.P), 0, g.w/2,
+	)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf(
+		"g.worldE: %.2f,\n pos: %.2f",
+		g.worldE, g.pos), g.w/2, g.h/2,
 	)
 
 }
