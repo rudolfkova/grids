@@ -58,3 +58,8 @@ func (v Vec4) Normalize() (Vec4, error) {
 func (v Vec4) Dot(v2 Vec4) float64 {
 	return v.X*v2.X + v.Y*v2.Y + v.Z*v2.Z + v.W*v2.W
 }
+
+func (v Vec4) ToVec3() Vec3 {
+
+	return Vec3{X: v.X, Y: v.Y, Z: v.Z}
+}

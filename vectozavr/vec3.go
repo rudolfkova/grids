@@ -71,3 +71,11 @@ func (v Vec3) Dot(v2 Vec3) float64 {
 func (v Vec3) Cross(v2 Vec3) Vec3 {
 	return NewVec3(v.Y*v2.Z-v.Z*v2.Y, v.Z*v2.X-v.X*v2.Z, v.X*v2.Y-v.Y*v2.X)
 }
+
+func (v Vec3) ToVec4() Vec4 {
+	return NewVec4(v.X, v.Y, v.Z, 1)
+}
+
+func ZeroVec3() Vec3 {
+	return NewVec3(0, 0, 0)
+}
