@@ -35,11 +35,13 @@ func NewGame() *Game {
 		w:     700,
 		h:     700,
 	}
-	g.P = vectozavr.Projection(90, float64(g.w)/float64(g.h), 1, 3)
+	g.pos = vectozavr.NewVec4(0, 0, 4, 1)
+	g.P = vectozavr.Projection(90, float64(g.w)/float64(g.h), 1, 10)
 	g.S = vectozavr.ScreenSpace(float64(g.w), float64(g.h))
 	g.cam.At = vectozavr.NewVec3(0, 0, 1)
 	g.cam.Up = vectozavr.NewVec3(0, 1, 0)
 	g.cam.Left = vectozavr.NewVec3(1, 0, 0)
+	g.cam.InitCamera()
 
 	return g
 }
@@ -47,7 +49,7 @@ func NewGame() *Game {
 func (g *Game) ProjPoint(p vectozavr.Vec3) vectozavr.Vec4 {
 	var newPoint vectozavr.Vec4
 	//  = g.S.Vec4Mul(g.P.Vec4Mul(p.ToVec4().Add(g.pos)))
-	newPoint = p.ToVec4()
+	newPoint = p.ToVec4().Add(g.pos)
 	newPoint = g.cam.ViewMatrix.Vec4Mul(newPoint)
 	newPoint = g.P.Vec4Mul(newPoint)
 	newPoint, _ = newPoint.Div(newPoint.W)
@@ -63,33 +65,43 @@ func (g *Game) keys() {
 		g.scale = 1
 		g.roll = 0
 		g.cam.E = vectozavr.NewVec3(0, 0, 0)
+
 	}
 	if ebiten.IsKeyPressed(ebiten.KeySpace) {
-		g.cam.Move(vectozavr.NewVec3(0, 0.1, 0))
+		g.cam.Move(vectozavr.NewVec3(0, 0.05, 0))
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyShift) {
-		g.cam.Move(vectozavr.NewVec3(0, -0.1, 0))
+		g.cam.Move(vectozavr.NewVec3(0, -0.05, 0))
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyA) {
-		g.cam.Move(vectozavr.NewVec3(0.1, 0, 0))
+		dv, _ := g.cam.Left.Div(25.0)
+		dv.Y = 0
+		g.cam.Move(dv)
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyD) {
 
-		g.cam.Move(vectozavr.NewVec3(-0.1, 0, 0))
+		dv, _ := g.cam.Left.Div(-25.0)
+		dv.Y = 0
+		g.cam.Move(dv)
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyW) {
-
-		g.cam.Move(vectozavr.NewVec3(0, 0, 0.1))
+		dv, _ := g.cam.At.Div(25.0)
+		dv.Y = 0
+		g.cam.Move(dv)
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyS) {
 
-		g.cam.Move(vectozavr.NewVec3(0, 0, -0.1))
+		dv, _ := g.cam.At.Div(-25.0)
+		dv.Y = 0
+		g.cam.Move(dv)
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyQ) {
-		g.angle += 0.01
+		g.cam.Rotate(0, 0.03)
+		g.angle += 0.03
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyE) {
-		g.angle -= 0.01
+		g.cam.Rotate(0, -0.03)
+		g.angle -= 0.03
 	}
 	if g.angle > 2*math.Pi {
 		g.angle = 0.0
@@ -107,10 +119,12 @@ func (g *Game) keys() {
 	}
 
 	if ebiten.IsKeyPressed(ebiten.KeyUp) {
-		g.tilt += 0.01
+		g.cam.Rotate(0.03, 0)
+		g.tilt += 0.03
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyDown) {
-		g.tilt -= 0.01
+		g.cam.Rotate(-0.03, 0)
+		g.tilt -= 0.03
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
 		g.roll += 0.01
@@ -139,6 +153,8 @@ func (g *Game) keys() {
 }
 
 func (g *Game) Update() error {
+	g.cam.Tilt = g.tilt
+	g.cam.Angle = g.angle
 	g.cam.ViewMat()
 	//-----------------------------------------------------------------
 	g.keys()
@@ -168,6 +184,18 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	vector.StrokeLine(screen, float32(p1.X), float32(p1.Y), float32(p2.X), float32(p2.Y), 2, color.RGBA{255, 0, 0, 255}, false)
 	vector.StrokeLine(screen, float32(p2.X), float32(p2.Y), float32(p3.X), float32(p3.Y), 2, color.RGBA{255, 0, 0, 255}, false)
 	vector.StrokeLine(screen, float32(p3.X), float32(p3.Y), float32(p1.X), float32(p1.Y), 2, color.RGBA{255, 0, 0, 255}, false)
+
+	p4 := g.ProjPoint(vectozavr.NewVec3(1, -1, 1))
+	p5 := g.ProjPoint(vectozavr.NewVec3(0, 1, 1))
+	p6 := g.ProjPoint(vectozavr.NewVec3(-1, -1, 1))
+
+	vector.StrokeLine(screen, float32(p4.X), float32(p4.Y), float32(p5.X), float32(p5.Y), 2, color.RGBA{255, 255, 0, 255}, false)
+	vector.StrokeLine(screen, float32(p5.X), float32(p5.Y), float32(p6.X), float32(p6.Y), 2, color.RGBA{255, 255, 0, 255}, false)
+	vector.StrokeLine(screen, float32(p6.X), float32(p6.Y), float32(p4.X), float32(p4.Y), 2, color.RGBA{255, 255, 0, 255}, false)
+
+	vector.StrokeLine(screen, float32(p1.X), float32(p1.Y), float32(p4.X), float32(p4.Y), 2, color.RGBA{255, 0, 255, 255}, false)
+	vector.StrokeLine(screen, float32(p2.X), float32(p2.Y), float32(p5.X), float32(p5.Y), 2, color.RGBA{255, 0, 255, 255}, false)
+	vector.StrokeLine(screen, float32(p3.X), float32(p3.Y), float32(p6.X), float32(p6.Y), 2, color.RGBA{255, 0, 255, 255}, false)
 
 	ebitenutil.DebugPrintAt(screen, fmt.Sprintf(
 		"g.Scale: %.2f, Tilt: %.2f, Angle: %.2f",
