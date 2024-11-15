@@ -5,8 +5,9 @@ import (
 )
 
 type Camera struct {
-	E          vectozavr.Vec3
-	ViewMatrix vectozavr.Matrix
+	E                 vectozavr.Vec3
+	ViewMatrix        vectozavr.Matrix
+	InverseViewMatrix vectozavr.Matrix
 
 	Left vectozavr.Vec3
 	Up   vectozavr.Vec3
@@ -34,6 +35,22 @@ func ViewMatrix(left vectozavr.Vec3, up vectozavr.Vec3, at vectozavr.Vec3, e vec
 	)
 }
 
+func InverseTransform(left, up, at, e vectozavr.Vec3) vectozavr.Matrix {
+	// Транспонируем подматрицу вращения (поскольку это ортогональная матрица)
+	var rotation [4][4]float64
+	rotation[0][0], rotation[1][0], rotation[2][0] = left.X, left.Y, left.Z
+	rotation[0][1], rotation[1][1], rotation[2][1] = up.X, up.Y, up.Z
+	rotation[0][2], rotation[1][2], rotation[2][2] = at.X, at.Y, at.Z
+	rotation[3][3] = 1
+
+	// Смещение
+	rotation[0][3] = e.Dot(left)
+	rotation[1][3] = e.Dot(up)
+	rotation[2][3] = e.Dot(at)
+
+	return vectozavr.NewMatrix(rotation)
+}
+
 func (c *Camera) InitCamera() {
 	c.left = c.Left
 	c.up = c.Up
@@ -42,6 +59,7 @@ func (c *Camera) InitCamera() {
 
 func (c *Camera) ViewMat() {
 	c.ViewMatrix = ViewMatrix(c.Left, c.Up, c.At, c.E)
+	c.InverseViewMatrix, _ = c.ViewMatrix.Inverse()
 }
 
 func (c *Camera) Move(dv vectozavr.Vec3) {

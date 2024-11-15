@@ -63,3 +63,7 @@ func (v Vec4) ToVec3() Vec3 {
 
 	return Vec3{X: v.X, Y: v.Y, Z: v.Z}
 }
+
+func (v Vec4) ToVec2() Vec2 {
+	return Vec2{X: v.X, Y: v.Y}
+}

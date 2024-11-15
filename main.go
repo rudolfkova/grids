@@ -23,21 +23,31 @@ type Game struct {
 	P vectozavr.Matrix
 	S vectozavr.Matrix
 
+	invP vectozavr.Matrix
+	invS vectozavr.Matrix
+
 	angle, tilt, roll float64
 	pos               vectozavr.Vec4
 
-	cam camera.Camera
+	cam    camera.Camera
+	visual bool
+
+	pointXY []vectozavr.Vec3
+	pointXZ []vectozavr.Vec3
+	pointYZ []vectozavr.Vec3
 }
 
 func NewGame() *Game {
 	g := &Game{
 		scale: 1.0,
-		w:     700,
+		w:     1000,
 		h:     700,
 	}
 	g.pos = vectozavr.NewVec4(0, 0, 4, 1)
-	g.P = vectozavr.Projection(90, float64(g.w)/float64(g.h), 1, 10)
+	g.P = vectozavr.Projection(60, float64(g.w)/float64(g.h), 1, 10)
+	g.invP, _ = g.P.Inverse()
 	g.S = vectozavr.ScreenSpace(float64(g.w), float64(g.h))
+	g.invS, _ = g.S.Inverse()
 	g.cam.At = vectozavr.NewVec3(0, 0, 1)
 	g.cam.Up = vectozavr.NewVec3(0, 1, 0)
 	g.cam.Left = vectozavr.NewVec3(1, 0, 0)
@@ -46,10 +56,46 @@ func NewGame() *Game {
 	return g
 }
 
+func (g *Game) ScreenToWorld(mousePos vectozavr.Vec2) (XY, XZ, YZ vectozavr.Vec3) {
+	tmp := vectozavr.NewVec4(((2.0*mousePos.X)/float64(g.w))-1.0, ((2.0*mousePos.Y)/float64(g.h))-1.0, -1, 1)
+	itmp := g.invP.Vec4Mul(tmp)
+	tmp = vectozavr.NewVec4(itmp.X, itmp.Y, -1, 0)
+	direction, _ := g.cam.InverseViewMatrix.Vec3Mul(tmp.ToVec3()).Normalize()
+	camPos := g.cam.InverseViewMatrix.Vec4Mul(vectozavr.NewVec4(0, 0, 0, 1)).ToVec3()
+
+	N := vectozavr.NewVec3(0, 0, 1)
+	t := -(camPos.Dot(N)) / direction.Dot(N)
+	resultXY := camPos.Add(direction.Mul(t))
+
+	N = vectozavr.NewVec3(0, 1, 0)
+	t = -(camPos.Dot(N)) / direction.Dot(N)
+	resultXZ := camPos.Add(direction.Mul(t))
+
+	N = vectozavr.NewVec3(1, 0, 0)
+	t = -(camPos.Dot(N)) / direction.Dot(N)
+	resultYZ := camPos.Add(direction.Mul(t))
+	return resultXY, resultXZ, resultYZ
+}
+
+func (g *Game) DrawGrid(screen *ebiten.Image, step float64, num float64) {
+	for i := -num; i <= num; i++ {
+		g.ProjLine(screen, vectozavr.NewVec3(i*step, -5, 0), vectozavr.NewVec3(i*step, 5, 0), vectozavr.NewVec3(0, 0, 0), color.RGBA{255, 0, 0, 255})
+		g.ProjLine(screen, vectozavr.NewVec3(-5, i*step, 0), vectozavr.NewVec3(5, i*step, 0), vectozavr.NewVec3(0, 0, 0), color.RGBA{255, 0, 0, 255})
+	}
+	for i := -num; i <= num; i++ {
+		g.ProjLine(screen, vectozavr.NewVec3(0, -5, i*step), vectozavr.NewVec3(0, 5, i*step), vectozavr.NewVec3(0, 0, 0), color.RGBA{0, 0, 255, 255})
+		g.ProjLine(screen, vectozavr.NewVec3(0, i*step, -5), vectozavr.NewVec3(0, i*step, 5), vectozavr.NewVec3(0, 0, 0), color.RGBA{0, 0, 255, 255})
+	}
+	for i := -num; i <= num; i++ {
+		g.ProjLine(screen, vectozavr.NewVec3(-5, 0, i*step), vectozavr.NewVec3(5, 0, i*step), vectozavr.NewVec3(0, 0, 0), color.RGBA{0, 255, 0, 255})
+		g.ProjLine(screen, vectozavr.NewVec3(i*step, 0, -5), vectozavr.NewVec3(i*step, 0, 5), vectozavr.NewVec3(0, 0, 0), color.RGBA{0, 255, 0, 255})
+	}
+}
+
 func (g *Game) ProjPoint(p vectozavr.Vec3) vectozavr.Vec4 {
 	var newPoint vectozavr.Vec4
 	//  = g.S.Vec4Mul(g.P.Vec4Mul(p.ToVec4().Add(g.pos)))
-	newPoint = p.ToVec4().Add(g.pos)
+	newPoint = p.ToVec4()
 	newPoint = g.cam.ViewMatrix.Vec4Mul(newPoint)
 	newPoint = g.P.Vec4Mul(newPoint)
 	newPoint, _ = newPoint.Div(newPoint.W)
@@ -58,14 +104,45 @@ func (g *Game) ProjPoint(p vectozavr.Vec3) vectozavr.Vec4 {
 	return newPoint
 }
 
+func (g *Game) DrawProjPoint(screen *ebiten.Image, p vectozavr.Vec3, color color.Color) {
+	pVec4 := g.ProjPoint(p)
+	if !g.visual {
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(
+			"X:%.f\nY:%.f\nZ:%.f",
+			p.X, p.Y, p.Z), int(pVec4.X), int(pVec4.Y),
+		)
+	}
+	vector.DrawFilledCircle(screen, float32(pVec4.X), float32(pVec4.Y), 10, color, false)
+}
+
+func (g *Game) ProjLine(screen *ebiten.Image, p1, p2 vectozavr.Vec3, pos vectozavr.Vec3, color color.Color) {
+	//  = g.S.Vec4Mul(g.P.Vec4Mul(p.ToVec4().Add(g.pos)))
+	p1Vec4 := g.ProjPoint(p1.Add(pos))
+	p2Vec4 := g.ProjPoint(p2.Add(pos))
+
+	if !g.visual {
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(
+			"X:%.f\nY:%.f",
+			p1.X, p1.Y), int(p1Vec4.X), int(p1Vec4.Y),
+		)
+	}
+	if !g.visual {
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf(
+			"X:%.f\nY:%.f",
+			p2.X, p2.Y), int(p2Vec4.X), int(p2Vec4.Y),
+		)
+	}
+
+	vector.StrokeLine(screen, float32(p1Vec4.X), float32(p1Vec4.Y), float32(p2Vec4.X), float32(p2Vec4.Y), 1, color, false)
+}
+
 func (g *Game) keys() {
 	if ebiten.IsKeyPressed(ebiten.KeyEnter) {
-		g.angle = 0
-		g.tilt = 0
-		g.scale = 1
-		g.roll = 0
 		g.cam.E = vectozavr.NewVec3(0, 0, 0)
 
+	}
+	if inpututil.IsKeyJustPressed(ebiten.Key5) {
+		g.visual = !g.visual
 	}
 	if ebiten.IsKeyPressed(ebiten.KeySpace) {
 		g.cam.Move(vectozavr.NewVec3(0, 0.05, 0))
@@ -95,11 +172,11 @@ func (g *Game) keys() {
 		dv.Y = 0
 		g.cam.Move(dv)
 	}
-	if ebiten.IsKeyPressed(ebiten.KeyQ) {
+	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
 		g.cam.Rotate(0, 0.03)
 		g.angle += 0.03
 	}
-	if ebiten.IsKeyPressed(ebiten.KeyE) {
+	if ebiten.IsKeyPressed(ebiten.KeyRight) {
 		g.cam.Rotate(0, -0.03)
 		g.angle -= 0.03
 	}
@@ -139,7 +216,13 @@ func (g *Game) keys() {
 		g.tilt = 2 * math.Pi
 	}
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-		//
+		x, y := ebiten.CursorPosition()
+		mousePos := vectozavr.NewVec2(float64(x), float64(y))
+		XY, XZ, YZ := g.ScreenToWorld(mousePos)
+		g.pointXY = append(g.pointXY, XY)
+		g.pointXZ = append(g.pointXZ, XZ)
+		g.pointYZ = append(g.pointYZ, YZ)
+
 	}
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight) {
 		//
@@ -177,25 +260,31 @@ type Place struct {
 
 func (g *Game) Draw(screen *ebiten.Image) {
 
-	p1 := g.ProjPoint(vectozavr.NewVec3(1, -1, 0))
-	p2 := g.ProjPoint(vectozavr.NewVec3(0, 1, 0))
-	p3 := g.ProjPoint(vectozavr.NewVec3(-1, -1, 0))
+	// g.ProjLine(screen, vectozavr.NewVec3(1, -1, 0), vectozavr.NewVec3(0, 1, 0), vectozavr.NewVec3(0, 0, 4), color.RGBA{255, 0, 0, 255})
+	// g.ProjLine(screen, vectozavr.NewVec3(0, 1, 0), vectozavr.NewVec3(-1, -1, 0), vectozavr.NewVec3(0, 0, 4), color.RGBA{255, 0, 0, 255})
+	// g.ProjLine(screen, vectozavr.NewVec3(-1, -1, 0), vectozavr.NewVec3(1, -1, 0), vectozavr.NewVec3(0, 0, 4), color.RGBA{255, 0, 0, 255})
 
-	vector.StrokeLine(screen, float32(p1.X), float32(p1.Y), float32(p2.X), float32(p2.Y), 2, color.RGBA{255, 0, 0, 255}, false)
-	vector.StrokeLine(screen, float32(p2.X), float32(p2.Y), float32(p3.X), float32(p3.Y), 2, color.RGBA{255, 0, 0, 255}, false)
-	vector.StrokeLine(screen, float32(p3.X), float32(p3.Y), float32(p1.X), float32(p1.Y), 2, color.RGBA{255, 0, 0, 255}, false)
+	// g.DrawProjPoint(screen, vectozavr.NewVec3(0, 0, 0), color.White)
 
-	p4 := g.ProjPoint(vectozavr.NewVec3(1, -1, 1))
-	p5 := g.ProjPoint(vectozavr.NewVec3(0, 1, 1))
-	p6 := g.ProjPoint(vectozavr.NewVec3(-1, -1, 1))
+	// g.ProjLine(screen, vectozavr.NewVec3(1, -1, 1), vectozavr.NewVec3(0, 1, 1), vectozavr.NewVec3(0, 0, 4), color.RGBA{255, 0, 0, 255})
+	// g.ProjLine(screen, vectozavr.NewVec3(0, 1, 1), vectozavr.NewVec3(-1, -1, 1), vectozavr.NewVec3(0, 0, 4), color.RGBA{255, 0, 0, 255})
+	// g.ProjLine(screen, vectozavr.NewVec3(-1, -1, 1), vectozavr.NewVec3(1, -1, 1), vectozavr.NewVec3(0, 0, 4), color.RGBA{255, 0, 0, 255})
 
-	vector.StrokeLine(screen, float32(p4.X), float32(p4.Y), float32(p5.X), float32(p5.Y), 2, color.RGBA{255, 255, 0, 255}, false)
-	vector.StrokeLine(screen, float32(p5.X), float32(p5.Y), float32(p6.X), float32(p6.Y), 2, color.RGBA{255, 255, 0, 255}, false)
-	vector.StrokeLine(screen, float32(p6.X), float32(p6.Y), float32(p4.X), float32(p4.Y), 2, color.RGBA{255, 255, 0, 255}, false)
+	// g.ProjLine(screen, vectozavr.NewVec3(-1, -1, 0), vectozavr.NewVec3(-1, -1, 1), vectozavr.NewVec3(0, 0, 4), color.RGBA{255, 0, 0, 255})
+	// g.ProjLine(screen, vectozavr.NewVec3(0, 1, 0), vectozavr.NewVec3(0, 1, 1), vectozavr.NewVec3(0, 0, 4), color.RGBA{255, 0, 0, 255})
+	// g.ProjLine(screen, vectozavr.NewVec3(1, -1, 0), vectozavr.NewVec3(1, -1, 1), vectozavr.NewVec3(0, 0, 4), color.RGBA{255, 0, 0, 255})
 
-	vector.StrokeLine(screen, float32(p1.X), float32(p1.Y), float32(p4.X), float32(p4.Y), 2, color.RGBA{255, 0, 255, 255}, false)
-	vector.StrokeLine(screen, float32(p2.X), float32(p2.Y), float32(p5.X), float32(p5.Y), 2, color.RGBA{255, 0, 255, 255}, false)
-	vector.StrokeLine(screen, float32(p3.X), float32(p3.Y), float32(p6.X), float32(p6.Y), 2, color.RGBA{255, 0, 255, 255}, false)
+	g.DrawGrid(screen, 0.5, 10)
+
+	for _, p := range g.pointXY {
+		g.DrawProjPoint(screen, p, color.RGBA{255, 0, 0, 255})
+	}
+	for _, p := range g.pointXZ {
+		g.DrawProjPoint(screen, p, color.RGBA{0, 255, 0, 255})
+	}
+	for _, p := range g.pointYZ {
+		g.DrawProjPoint(screen, p, color.RGBA{0, 0, 255, 255})
+	}
 
 	ebitenutil.DebugPrintAt(screen, fmt.Sprintf(
 		"g.Scale: %.2f, Tilt: %.2f, Angle: %.2f",
@@ -210,10 +299,6 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		"A: %.f\nB:%.f",
 		g.pos, g.P), 0, g.w/2,
 	)
-	// ebitenutil.DebugPrintAt(screen, fmt.Sprintf(
-	// 	"g.worldE: %.2f,\n pos: %.2f",
-	// 	g.worldE, g.pos), g.w/2, g.h/2,
-	// )
 
 }
 

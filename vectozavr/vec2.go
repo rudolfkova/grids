@@ -15,7 +15,7 @@ type Vec2 struct {
 }
 
 // Creates a new Vec2 with the given coordinates
-func New(x, y float64) Vec2 {
+func NewVec2(x, y float64) Vec2 {
 	return Vec2{X: x, Y: y}
 }
 
@@ -68,4 +68,8 @@ func (v Vec2) Normalize() (Vec2, error) {
 // The scalar product
 func (v Vec2) Dot(v2 Vec2) float64 {
 	return v.X*v2.X + v.Y*v2.Y
+}
+
+func (v Vec2) ToVec4() Vec4 {
+	return Vec4{X: v.X, Y: v.Y, Z: 0, W: 1}
 }

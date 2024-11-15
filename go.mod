@@ -11,4 +11,5 @@ require (
 	github.com/jezek/xgb v1.1.1 // indirect
 	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/sys v0.25.0 // indirect
+	gonum.org/v1/gonum v0.15.1 // indirect
 )
